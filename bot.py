@@ -11,12 +11,12 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 GEMINI_KEY = os.getenv("GEMINI_KEY")
 
-# Gemini AI Configure - මෙහිදී සරලව gemini-pro පාවිච්චි කරමු (වැඩිපුරම stable නිසා)
+# Gemini Configure - ඔයාගේ API Key එකට ගැලපෙන අලුත්ම model එක
 genai.configure(api_key=GEMINI_KEY)
-model = genai.GenerativeModel('gemini-pro')
+model = genai.GenerativeModel('gemini-2.0-flash')
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("👋 ආයුබෝවන්! දැන් මගෙන් ප්‍රශ්න අහන්න පුළුවන්.")
+    await update.message.reply_text("👋 ආයුබෝවන්! දැන් මම GitHub හරහා වැඩ කරනවා. මගෙන් ඕනෑම දෙයක් අසන්න.")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_text = update.message.text
@@ -25,21 +25,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
 
     try:
-        # AI එකෙන් පිළිතුර ලබා ගැනීම
         response = model.generate_content(user_text)
         await update.message.reply_text(response.text)
     except Exception as e:
         logging.error(f"Error: {e}")
-        # Error එක කෙලින්ම Chat එකට පෙන්වමු දෝෂය හඳුනාගන්න
-        await update.message.reply_text(f"දෝෂයක්: {str(e)[:100]}")
+        # දෝෂය කෙලින්ම chat එකට එවයි
+        await update.message.reply_text(f"❌ Error: {str(e)}")
 
 if __name__ == '__main__':
-    # Bot එක හදන කොට පරණ පණිවිඩ මඟහරින්න drop_pending_updates දාමු
     application = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
     
     application.add_handler(CommandHandler('start', start))
     application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
     
     print("Bot is starting...")
-    # එකම Bot දෙපොළක Run වීම වැළැක්වීමට මෙය උදවු වේ
+    # Conflict error මඟහරවා ගැනීමට මෙය අත්‍යවශ්‍යයි
     application.run_polling(drop_pending_updates=True)
