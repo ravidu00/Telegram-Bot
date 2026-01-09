@@ -3,44 +3,42 @@ import logging
 from telegram import Update
 from telegram.constants import ChatAction
 from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, CommandHandler, filters
-import google.generativeai as genai
+from groq import Groq
 
-# Logging සැකසුම්
+# Logging
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-GEMINI_KEY = os.getenv("GEMINI_KEY")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
-# Gemini Configure
-genai.configure(api_key=GEMINI_KEY)
-
-# ඔයාගේ API එකට ගැලපෙන අලුත්ම සහ වේගවත්ම මාදිලිය
-model = genai.GenerativeModel('gemini-2.0-flash')
+# Groq Client එක සකස් කිරීම
+client = Groq(api_key=GROQ_API_KEY)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("👋 ආයුබෝවන්! මම දැන් අලුත් API එක සමඟ GitHub හරහා වැඩ කරනවා.")
+    await update.message.reply_text("🚀 මම දැන් Groq (Llama 3) හරහා වැඩ! මම හරිම වේගවත්. ඕනෑම දෙයක් අහන්න.")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_text = update.message.text
     if not user_text: return
     
-    # Bot 'Typing...' ලෙස පෙන්වීම
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
 
     try:
-        response = model.generate_content(user_text)
-        await update.message.reply_text(response.text)
+        # Groq හරහා පිළිතුර ලබා ගැනීම
+        chat_completion = client.chat.completions.create(
+            messages=[{"role": "user", "content": user_text}],
+            model="llama3-8b-8192", # ඉතාමත් වේගවත් Model එකක්
+        )
+        reply = chat_completion.choices[0].message.content
+        await update.message.reply_text(reply)
     except Exception as e:
-        logging.error(f"Error: {e}")
-        # දෝෂය කෙලින්ම chat එකේ පෙන්වයි
-        await update.message.reply_text(f"❌ Error: {str(e)}")
+        logging.error(f"Groq Error: {e}")
+        await update.message.reply_text("❌ පොඩි දෝෂයක් වුණා. පසුව උත්සාහ කරන්න.")
 
 if __name__ == '__main__':
-    # එකවර දෙපොළක Bot Run වීම (Conflict) වැළැක්වීමට drop_pending_updates භාවිතා කරයි
     application = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
-    
     application.add_handler(CommandHandler('start', start))
     application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
     
-    print("Bot is starting on GitHub Actions...")
+    print("Bot is starting using Groq...")
     application.run_polling(drop_pending_updates=True)
