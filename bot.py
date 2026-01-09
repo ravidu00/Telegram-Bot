@@ -1,67 +1,77 @@
 import os
 import logging
-from telegram import Update
-from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filters, CommandHandler
+from telegram import Update, ChatAction
+from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, CommandHandler, filters
 import google.generativeai as genai
 
-# Logging setup - Error එකක් ආවොත් බලාගන්න
+# Logging සැකසුම් (Error හඳුනා ගැනීමට)
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
 
-# API Keys (Environment Variables හරහා ලබා ගනී)
+# Environment Variables වලින් API Keys ලබා ගැනීම
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 GEMINI_KEY = os.getenv("GEMINI_KEY")
 
-# Gemini AI Configure කිරීම (අලුත්ම gemini-1.5-flash මොඩල් එක මෙහි ඇත)
+# Gemini AI සැකසුම්
 genai.configure(api_key=GEMINI_KEY)
 model = genai.GenerativeModel('gemini-1.5-flash')
 
+# /start command එක සඳහා
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """ /start command එක ලැබුණු විට ක්‍රියාත්මක වේ """
-    welcome_text = (
-        "👋 ආයුබෝවන්! මම Gemini AI මගින් ක්‍රියා කරන බොට් කෙනෙක්.\n\n"
-        "ඔබට අවශ්‍ය ඕනෑම දෙයක් මගෙන් අහන්න. මම උදවු කරන්නම්!"
+    user_name = update.effective_user.first_name
+    welcome_msg = (
+        f"👋 ආයුබෝවන් {user_name}!\n\n"
+        "මම Gemini AI මගින් ක්‍රියා කරන Movie Helper Bot කෙනෙක්.\n\n"
+        "🌟 **ඔබට කළ හැකි දේ:**\n"
+        "- ඕනෑම වසරක නමක් ලබා දී එම වසරේ චිත්‍රපට ලැයිස්තුවක් ඉල්ලන්න.\n"
+        "- ඕනෑම විෂයයක් ගැන මගෙන් ප්‍රශ්න අසන්න.\n\n"
+        "උදාහරණ: '2024 වසරේ හොඳම movies මොනවාද?'"
     )
-    await context.bot.send_message(chat_id=update.effective_chat.id, text=welcome_text)
+    await update.message.reply_text(welcome_msg)
 
+# /help command එක සඳහා
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    help_text = "ඔබට අවශ්‍ය ඕනෑම ප්‍රශ්නයක් කෙලින්ම Type කර එවන්න. මම ඒ සඳහා පිළිතුරු ලබා දෙන්නම්."
+    await update.message.reply_text(help_text)
+
+# සාමාන්‍ය පණිවිඩ සහ Movie ප්‍රශ්න හැසිරවීම
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """පණිවිඩ ලැබෙන විට ක්‍රියාත්මක වන ප්‍රධාන කොටස"""
     user_text = update.message.text
     if not user_text:
         return
 
-    # Bot "Typing..." ලෙස පෙන්වීමට (User ට bot වැඩ කරන බව දැනේ)
+    # Bot "Typing..." ලෙස පෙන්වීම
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
 
     try:
-        # Gemini වෙතින් පිළිතුර ලබා ගැනීම
-        response = model.generate_content(user_text)
-        bot_reply = response.text
+        # Gemini AI වෙතින් පිළිතුර ලබා ගැනීම
+        # මෙහිදී අපිට AI එකට movie list එකක් විදිහට එවන්න කියලා විශේෂයෙන් කියන්න පුළුවන්
+        prompt = f"පහත ප්‍රශ්නයට පිළිතුරු දෙන්න. එය movie එකක් ගැන නම් ලස්සන ලැයිස්තුවක් ලෙස දෙන්න: {user_text}"
+        response = model.generate_content(prompt)
         
-        # පිළිතුර Telegram එකට යැවීම
-        await context.bot.send_message(chat_id=update.effective_chat.id, text=bot_reply)
+        # Telegram හරහා පිළිතුර යැවීම
+        await update.message.reply_text(response.text)
         
     except Exception as e:
         logging.error(f"Error: {e}")
-        # දෝෂයක් ආවොත් User ට පණිවිඩයක් යැවීම
-        await context.bot.send_message(
-            chat_id=update.effective_chat.id, 
-            text="සමාවන්න, මට මේ වෙලාවේ පිළිතුරක් ලබා දෙන්න බැහැ. පසුව උත්සාහ කරන්න."
-        )
+        await update.message.reply_text("සමාවන්න, දෝෂයක් සිදු විය. කරුණාකර ඔබගේ API Keys පරීක්ෂා කරන්න.")
 
 if __name__ == '__main__':
-    # Token එක නැත්නම් Error එකක් පෙන්වීමට
-    if not TELEGRAM_TOKEN:
-        print("Error: TELEGRAM_TOKEN එක ලබා දී නැත!")
+    # Token එක පරීක්ෂා කිරීම
+    if not TELEGRAM_TOKEN or not GEMINI_KEY:
+        print("ERROR: API Keys ලබා දී නැත! කරුණාකර Environment Variables පරීක්ෂා කරන්න.")
     else:
-        # Bot එක Build කිරීම
+        # Application එක සෑදීම
         application = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
         
-        # CommandHandlers සහ MessageHandlers එකතු කිරීම
+        # විධානයන් (Commands) සම්බන්ධ කිරීම
         application.add_handler(CommandHandler('start', start))
+        application.add_handler(CommandHandler('help', help_command))
+        
+        # සාමාන්‍ය පණිවිඩ (Text Messages) සම්බන්ධ කිරීම
         application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
         
-        print("Bot is successfully running...")
+        print("Bot is active and running...")
         application.run_polling()
